@@ -7,6 +7,7 @@
 package livelog
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"sync"
@@ -143,11 +144,16 @@ func (b *Writer) clear() {
 func (b *Writer) stop() bool {
 	b.Lock()
 	var closed bool
-	if b.closed == false {
+	if !b.closed {
 		close(b.close)
 		closed = true
 		b.closed = true
 	}
+	if linebuf.Len() != 0 {
+		b.Write(linebuf.Bytes())
+		linebuf.Reset()
+	}
+
 	b.Unlock()
 	return closed
 }
@@ -179,9 +185,16 @@ func (b *Writer) start() error {
 	}
 }
 
+var linebuf bytes.Buffer
+
 func split(p []byte) []string {
-	s := string(p)
-	v := []string{s}
+	linebuf.Write(p)
+	s := linebuf.String()
+	lastLF := strings.LastIndex(s, "\n")
+	if lastLF == -1 {
+		return nil
+	}
+	v := []string{string(linebuf.Next(lastLF + 1))}
 	// kubernetes buffers the output and may combine
 	// multiple lines into a single block of output.
 	// Split into multiple lines.
