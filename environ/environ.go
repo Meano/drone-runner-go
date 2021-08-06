@@ -8,6 +8,8 @@ package environ
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -249,6 +251,87 @@ func Slice(env map[string]string) []string {
 	}
 	sort.Strings(s)
 	return s
+}
+
+var windowsOsEnvKeys = []string{
+	"ALLUSERSPROFILE",         // C:\ProgramData
+	"CommonProgramFiles",      // C:\Program Files\Common Files
+	"CommonProgramFiles(x86)", // C:\Program Files (x86)\Common Files
+	"CommonProgramW6432",      // C:\Program Files\Common Files
+	"COMPUTERNAME",            //
+	"ComSpec",                 //
+	"DriverData",
+	"OS",
+	"Path",    // required by powershell
+	"PATHEXT", // required by powershell
+	"PROCESSOR_ARCHITECTURE",
+	"PROCESSOR_IDENTIFIER",
+	"PROCESSOR_LEVEL",
+	"PROCESSOR_REVISION",
+	"ProgramData",
+	"ProgramFiles",
+	"ProgramFiles(x86)",
+	"ProgramW6432",
+	"PUBLIC",
+	"SystemDrive", // required by powershell
+	"SystemRoot",  // required by powershell
+	"USERDOMAIN",
+	"USERDOMAIN_ROAMINGPROFILE",
+	"USERNAME",
+	"windir",
+	"TEMP",
+	"TMP",
+}
+
+var windowsUserEnvKeys = []string{
+	"APPDATA",
+	"HOMEDRIVE",
+	"HOMEPATH",
+	"LOCALAPPDATA",
+	"TEMP",
+	"TMP",
+	"USERPROFILE",
+}
+
+func OS(OS string, base string) map[string]string {
+	envs := map[string]string{}
+	if OS != "windows" {
+		return envs
+	}
+
+	for _, name := range windowsOsEnvKeys {
+		if value := getenv(name); value != "" {
+			envs[strings.ToUpper(name)] = value
+		}
+	}
+	user := envs["USERNAME"]
+	if user == "" {
+		user = "drone"
+		envs["USERNAME"] = user
+	}
+
+	if base == "" {
+		for _, name := range windowsUserEnvKeys {
+			if value := getenv(name); value != "" {
+				envs[strings.ToUpper(name)] = value
+			}
+		}
+		return envs
+	}
+
+	home := base + user
+	envs["USERPROFILE"] = home
+	envs["HOMEDRIVE"] = filepath.VolumeName(home)
+	envs["HOMEPATH"] = strings.ReplaceAll(home, envs["HOMEDRIVE"], "")
+	envs["APPDATA"] = home + `\AppData\Roaming`
+	envs["LOCALAPPDATA"] = home + `\AppData\Local`
+	envs["TEMP"] = envs["LOCALAPPDATA"] + `\Temp`
+	envs["TMP"] = envs["TEMP"]
+
+	os.MkdirAll(envs["APPDATA"], 0777)
+	os.MkdirAll(envs["TEMP"], 0777)
+
+	return envs
 }
 
 // copyenv copies environment variables from the source map
