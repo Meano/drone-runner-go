@@ -84,7 +84,7 @@ func (b *Writer) Write(p []byte) (n int, err error) {
 		b.size = b.size + len(part)
 		b.num++
 
-		if b.stopped() == false {
+		if !b.stopped() {
 			b.Lock()
 			b.pending = append(b.pending, line)
 			b.Unlock()
@@ -194,16 +194,9 @@ func split(p []byte) []string {
 	if lastLF == -1 {
 		return nil
 	}
-	v := []string{string(linebuf.Next(lastLF + 1))}
-	// kubernetes buffers the output and may combine
-	// multiple lines into a single block of output.
-	// Split into multiple lines.
-	//
-	// note that docker output always inclines a line
-	// feed marker. This needs to be accounted for when
-	// splitting the output into multiple lines.
-	if strings.Contains(strings.TrimSuffix(s, "\n"), "\n") {
-		v = strings.SplitAfter(s, "\n")
-	}
+
+	v := strings.SplitAfter(string(linebuf.Next(lastLF+1)), "\n")
+	v = v[:len(v)-1]
+
 	return v
 }
